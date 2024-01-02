@@ -3,8 +3,11 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 import csv
+import asyncio
+
 
 url_main: str = "https://moba.ru/catalog/"
+COUNT: int = 0
 
 
 def get_page(url: str) -> None:
@@ -30,22 +33,34 @@ def find_links() -> None:
                 file.write("https://moba.ru/" + i.find('a')['href'] + '\n')
 
 
-def find_data(url: str) -> None:
+async def find_data(url: str) -> None:
+
+    global COUNT
+
     option = webdriver.EdgeOptions()
     option.add_argument("--headless")
+
     driver = webdriver.Edge(options=option)
     driver.get(url)
-    with open('table.csv', 'a') as table:
+
+    with open('table.csv', 'a', newline='') as table:
+
+        csvwriter = csv.writer(table)
+
         while True:
+
             time.sleep(2)
+
             soup = BeautifulSoup(str(driver.page_source), 'lxml')
             blocks = soup.find_all('td', class_="wrapper_td")
-            csvwriter = csv.writer(table)
+
             for i in blocks:
                 name = i.find('a', class_='dark_link').text
-                price = i.find('span', class_='price_value').text
+                price_first = i.find_all('span', class_='price_value')[0].text
+                price_second = i.find_all('span', class_='price_value')[1].text
                 link = i.find('a', class_='dark_link')['href']
-                csvwriter.writerow([name, price, 'https://moba.ru/'+link])
+                COUNT += 1
+                csvwriter.writerow([name, price_first, price_second, 'https://moba.ru/'+link])
             try:
                 driver.find_element(By.CLASS_NAME, 'flex-next').click()
             except:
@@ -53,15 +68,21 @@ def find_data(url: str) -> None:
     driver.close()
 
 
-def main():
+async def main():
     # get_page(url_main)
     # find_links()
+    with open('table.csv', 'a') as table:
+        csvwriter = csv.writer(table)
+        csvwriter.writerow(["Наименование", "Первая цена", "Вторая цена", "Ссылка"])
     with open('links', 'r', encoding='utf-8') as file:
         links = list(map(lambda x: x[0:-2], file.readlines()))
     for i in range(0, len(links)):
-        find_data(links[i])
-        print(f"[+] Success complete page {i}")
 
+        await find_data(links[i])
+        await asyncio.sleep(2)
+
+        print(f"[+] Success complete page {i}")
+    print(f"Count : {COUNT}")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
